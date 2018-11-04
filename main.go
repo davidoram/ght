@@ -68,7 +68,7 @@ func main() {
 				err = doListRepos(reposCommand, orgPtr, true)
 
 			default:
-				log.Printf("Unknown command '%s'", os.Args[2])
+				log.Printf("Help unknown command '%s'", os.Args[2])
 				log.Println(helptext)
 				os.Exit(1)
 
