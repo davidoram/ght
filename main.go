@@ -52,7 +52,8 @@ func main() {
 	orgPtr := reposCommand.String("o", "", "Specify the GitHub organisation")
 	userPtr := reposCommand.String("u", "", "Specify the GitHub user")
 	repoCommand := flag.NewFlagSet("repo", flag.ExitOnError)
-	numReleasesPtr := reposCommand.Int("n", 20, "Specify the maximum number of releases to display")
+	maxReleasesPtr := reposCommand.Int("maxr", 20, "Specify the maximum number of Releases to display")
+	maxTagsPtr := reposCommand.Int("maxt", 20, "Specify the maximum number of Tags to display")
 
 	// Verify that a subcommand has been provided
 	// os.Arg[0] is the main command
@@ -73,7 +74,7 @@ func main() {
 				err = doListRepos(reposCommand, orgPtr, userPtr, true)
 
 			case "repo":
-				err = doRepo(repoCommand, *numReleasesPtr, true)
+				err = doRepo(repoCommand, *maxReleasesPtr, *maxTagsPtr, true)
 
 			default:
 				log.Printf("Help unknown command '%s'", os.Args[2])
@@ -90,7 +91,7 @@ func main() {
 
 	case "repo":
 		repoCommand.Parse(os.Args[2:])
-		err = doRepo(repoCommand, *numReleasesPtr, false)
+		err = doRepo(repoCommand, *maxReleasesPtr, *maxTagsPtr, false)
 
 	default:
 		log.Printf("Unknown command '%s'", os.Args[1])
@@ -183,7 +184,7 @@ The arguments are:
 	return nil
 }
 
-func doRepo(flags *flag.FlagSet, maxReleases int, displayHelp bool) error {
+func doRepo(flags *flag.FlagSet, maxReleases, maxTags int, displayHelp bool) error {
 
 	helptext := `
 ght repo 		Summarise a given repository
@@ -269,6 +270,20 @@ Usage:
 		log.Printf(tmpl, status, formatDate(release.PublishedAt), *release.TagName, *release.Author.Login, release.GetName())
 	}
 
+	tags, err := listTags(client, owner, reponame, maxTags)
+	if err != nil {
+		return err
+	}
+	log.Printf("\nTags:\n---------\n")
+	tmpl = "%-12s %-45s\n"
+	log.Printf(tmpl, "Name", "Commit")
+	for i, tag := range tags {
+		if i >= maxTags {
+			break
+		}
+		log.Printf(tmpl, *tag.Name, tag.Commit.GetSHA())
+	}
+
 	return nil
 }
 
@@ -277,6 +292,31 @@ func formatDate(t *github.Timestamp) string {
 		return ""
 	}
 	return t.In(time.Local).Format("2006-01-02 15:04:05")
+}
+
+// returns tags in created order :-(
+func listTags(client *github.Client, owner, repo string, max int) ([]*github.RepositoryTag, error) {
+	ctx := context.Background()
+	opt := &github.ListOptions{PerPage: 100}
+	// get all pages of results
+	var allTags []*github.RepositoryTag
+	for {
+		releases, resp, err := client.Repositories.ListTags(ctx, owner, repo, opt)
+		if err != nil {
+			return allTags, err
+		}
+		allTags = append(allTags, releases...)
+		if resp.NextPage == 0 {
+			break
+		}
+		// Break after retrieved max. Note this function can returned a slice larger than max, because
+		// we retrieve a page at a time
+		if max > 0 && len(allTags) > max {
+			break
+		}
+		opt.Page = resp.NextPage
+	}
+	return allTags, nil
 }
 
 func listReleases(client *github.Client, owner, repo string, max int) ([]*github.RepositoryRelease, error) {
@@ -293,7 +333,7 @@ func listReleases(client *github.Client, owner, repo string, max int) ([]*github
 		if resp.NextPage == 0 {
 			break
 		}
-		// Break after retrieved max, note sreturned size might be a bit larger than max, because
+		// Break after retrieved max. Note this function can returned a slice larger than max, because
 		// we retrieve a page at a time
 		if max > 0 && len(allReleases) > max {
 			break
