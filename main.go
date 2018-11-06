@@ -237,19 +237,30 @@ Usage:
 		return err
 	}
 	log.Printf("\nReleases:\n---------\n")
-	tmpl := "%-19s %-12s %-18s %-40s\n"
-	log.Printf(tmpl, "Published", "Tag", "Author", "Name")
+	tmpl := "%-11s %-19s %-12s %-18s %-40s\n"
+	log.Printf(tmpl, "Status", "Published", "Tag", "Author", "Name")
 	for i, release := range releases {
 		if i >= maxReleases {
 			break
 		}
-		log.Printf(tmpl, formatDate(release.PublishedAt), *release.TagName, *release.Author.Login, release.GetName())
+		status := ""
+		if *release.Draft {
+			status = "Draft"
+		} else if *release.Prerelease {
+			status = "Pre-release"
+		} else {
+			status = "Published"
+		}
+		log.Printf(tmpl, status, formatDate(release.PublishedAt), *release.TagName, *release.Author.Login, release.GetName())
 	}
 
 	return nil
 }
 
 func formatDate(t *github.Timestamp) string {
+	if t == nil {
+		return ""
+	}
 	return t.In(time.Local).Format("2006-01-02 15:04:05")
 }
 
