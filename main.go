@@ -190,7 +190,7 @@ ght repo 		Summarise a given repository
 
 Usage:
 
-	mdd repo owner repo
+	mdd repo owner/repo
 
 `
 
@@ -211,8 +211,12 @@ Usage:
 		return err
 	}
 
-	owner := os.Args[2]
-	reponame := os.Args[3]
+	ownerRepo := strings.Split(os.Args[2], "/")
+	if len(ownerRepo) != 2 {
+		return fmt.Errorf("Error parsing %s as 'owner/repo'", os.Args[2])
+	}
+	owner := ownerRepo[0]
+	reponame := ownerRepo[1]
 
 	ctx := context.Background()
 	repo, _, err := client.Repositories.Get(ctx, owner, reponame)
@@ -220,16 +224,27 @@ Usage:
 		return err
 	}
 
-	log.Printf("FullName           %s\n", *repo.FullName)
-	log.Printf("DefaultBranch      %s\n", *repo.DefaultBranch)
+	log.Printf("Full name :           %s\n", *repo.FullName)
+	log.Printf("Default branch :      %s\n", *repo.DefaultBranch)
 
 	protection, _, err := client.Repositories.GetBranchProtection(ctx, owner, reponame, *repo.DefaultBranch)
 	if protection != nil {
 		prReviews := protection.GetRequiredPullRequestReviews()
-		log.Printf("BranchProtection/RequireCodeOwnerReviews       %t\n", prReviews.RequireCodeOwnerReviews)
-		log.Printf("BranchProtection/RequiredApprovingReviewCount  %d\n", prReviews.RequiredApprovingReviewCount)
+		if prReviews != nil {
+			log.Printf("Branch protection (%s), requires code review :  %t\n", *repo.DefaultBranch, true)
+			log.Printf("Branch protection (%s), approval count :        %d\n", *repo.DefaultBranch, prReviews.RequiredApprovingReviewCount)
+		} else {
+			log.Printf("Branch protection (%s), requires code review :  %t\n", *repo.DefaultBranch, false)
+		}
+
+		prStatusChecks := protection.GetRequiredStatusChecks()
+		if prStatusChecks != nil {
+			log.Printf("Branch protection (%s), branch must be up to date before merge :  %t\n", *repo.DefaultBranch, prStatusChecks.Strict)
+			log.Printf("Branch protection (%s), status checks :  %v\n", *repo.DefaultBranch, prStatusChecks.Contexts)
+		}
+
 	} else {
-		log.Printf("BranchProtection   None\n")
+		log.Printf("Branch protection  (%s):  None\n", *repo.DefaultBranch)
 	}
 
 	releases, err := listReleases(client, owner, reponame, maxReleases)

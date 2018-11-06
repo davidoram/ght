@@ -38,7 +38,7 @@ sstephenson/bats
 To display repository summary, run the following, for example to show a summary of the [gogs project](https://github.com/gogs/gogs):
 
 ```
-$ ght repo gogs gogs
+$ ght repo gogs/gogs
 FullName           gogs/gogs
 DefaultBranch      master
 BranchProtection   None
@@ -71,10 +71,13 @@ Published           Tag          Author             Name
 The *Releases* section **ONLY** displays github releases, and **NOT** tags, for example compare the contents of [this repositories releases and tags](https://github.com/davidoram/gittest/releases) with the output: from `ght`:
 
 ```
-$ ght repo davidoram gittest
-FullName           davidoram/gittest
-DefaultBranch      master
-BranchProtection   None
+$ ght repo davidoram/gittest
+Full name :           davidoram/gittest
+Default branch :      master
+Branch protection (master), requires code review :  true
+Branch protection (master), approval count :        1
+Branch protection (master), branch must be up to date before merge :  true
+Branch protection (master), status checks :  []
 
 Releases:
 ---------
@@ -84,4 +87,6 @@ Draft                           v1.1.2       davidoram          Added -p flag
 Published   2017-07-10 16:29:40 v1.1.3       davidoram          The first release
 ```
 
-Note that `v1.1.1` and `v1.1.2` are not returned in the list of releases.
+Note that tags `v1.1.1` and `v1.1.2` are not returned in the list of releases.
+
+Also note the branch protection settings are displayed for the default branch, in this case `master`.
