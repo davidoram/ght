@@ -13,5 +13,5 @@ install: clean go-deps
 .PHONY: go-deps
 go-deps:
 	go get golang.org/x/oauth2
-	go get github.com/google/go-github/github
+	go get github.com/shurcooL/githubv4
 

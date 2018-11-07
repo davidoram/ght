@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/google/go-github/github"
+	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 	"io/ioutil"
 	"log"
@@ -12,7 +12,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"time"
+	_ "time"
 )
 
 const (
@@ -36,6 +36,11 @@ Configuration:
 `
 )
 
+type Repository struct {
+	Name          string
+	NameWithOwner string
+}
+
 func init() {
 	// Remove the Date/Time from log messages
 	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
@@ -51,9 +56,9 @@ func main() {
 	reposCommand := flag.NewFlagSet("repos", flag.ExitOnError)
 	orgPtr := reposCommand.String("o", "", "Specify the GitHub organisation")
 	userPtr := reposCommand.String("u", "", "Specify the GitHub user")
-	repoCommand := flag.NewFlagSet("repo", flag.ExitOnError)
-	maxReleasesPtr := reposCommand.Int("maxr", 20, "Specify the maximum number of Releases to display")
-	maxTagsPtr := reposCommand.Int("maxt", 20, "Specify the maximum number of Tags to display")
+	// repoCommand := flag.NewFlagSet("repo", flag.ExitOnError)
+	// maxReleasesPtr := reposCommand.Int("maxr", 20, "Specify the maximum number of Releases to display")
+	// maxTagsPtr := reposCommand.Int("maxt", 20, "Specify the maximum number of Tags to display")
 
 	// Verify that a subcommand has been provided
 	// os.Arg[0] is the main command
@@ -73,8 +78,8 @@ func main() {
 			case "repos":
 				err = doListRepos(reposCommand, orgPtr, userPtr, true)
 
-			case "repo":
-				err = doRepo(repoCommand, *maxReleasesPtr, *maxTagsPtr, true)
+			// case "repo":
+			// 	err = doRepo(repoCommand, *maxReleasesPtr, *maxTagsPtr, true)
 
 			default:
 				log.Printf("Help unknown command '%s'", os.Args[2])
@@ -89,9 +94,9 @@ func main() {
 		reposCommand.Parse(os.Args[2:])
 		err = doListRepos(reposCommand, orgPtr, userPtr, false)
 
-	case "repo":
-		repoCommand.Parse(os.Args[2:])
-		err = doRepo(repoCommand, *maxReleasesPtr, *maxTagsPtr, false)
+	// case "repo":
+	// 	repoCommand.Parse(os.Args[2:])
+	// 	err = doRepo(repoCommand, *maxReleasesPtr, *maxTagsPtr, false)
 
 	default:
 		log.Printf("Unknown command '%s'", os.Args[1])
@@ -106,7 +111,7 @@ func main() {
 	}
 }
 
-func getClient() (*github.Client, error) {
+func getClient() (*githubv4.Client, error) {
 	usr, err := user.Current()
 	if err != nil {
 		return nil, err
@@ -114,12 +119,12 @@ func getClient() (*github.Client, error) {
 
 	path := filepath.Join(usr.HomeDir, ".ght")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, fmt.Errorf("ght. Missing '%s' file. This should contain your GitHub Personal API token. See https://blog.github.com/2013-05-16-personal-api-tokens/\n", path)
+		return nil, fmt.Errorf("ght. Missing '%s' file. This should contain your GitHub Personal API token. See https://blog.github.com/2013-05-16-personal-api-tokens/", path)
 	}
 
 	token, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("ght. Error reading file '%s', error: %s\n", path, err)
+		return nil, fmt.Errorf("ght. Error reading file '%s', error: %s", path, err)
 	}
 
 	ctx := context.Background()
@@ -128,9 +133,9 @@ func getClient() (*github.Client, error) {
 	)
 	tc := oauth2.NewClient(ctx, ts)
 
-	client := github.NewClient(tc)
+	client := githubv4.NewClient(tc)
 	if err != nil {
-		return nil, fmt.Errorf("ght. Error creating client: %s\n", err)
+		return nil, fmt.Errorf("ght. Error creating client: %s", err)
 	}
 
 	return client, nil
@@ -143,7 +148,7 @@ ght repos 		List github repositories for an organisation or user
 
 Usage:
 
-	mdd repos [arguments]
+	mdd repos user-or-organisation [arguments]
 
 The arguments are:
 `
@@ -169,7 +174,7 @@ The arguments are:
 		return err
 	}
 
-	var allRepos []*github.Repository
+	var allRepos []Repository
 	if *org != "" {
 		allRepos, err = listReposByOrg(client, *org)
 	} else if *user != "" {
@@ -179,210 +184,234 @@ The arguments are:
 		return err
 	}
 	for _, r := range allRepos {
-		log.Printf("%s\n", *r.FullName)
+		log.Printf("%s\n", r.NameWithOwner)
 	}
 	return nil
 }
 
-func doRepo(flags *flag.FlagSet, maxReleases, maxTags int, displayHelp bool) error {
+// func doRepo(flags *flag.FlagSet, maxReleases, maxTags int, displayHelp bool) error {
 
-	helptext := `
-ght repo 		Summarise a given repository
+// 	helptext := `
+// ght repo 		Summarise a given repository
 
-Usage:
+// Usage:
 
-	mdd repo owner/repo
+// 	mdd repo owner/repo
 
-`
+// `
 
-	// Asked for help?
-	if displayHelp {
-		log.Println(helptext)
-		flags.PrintDefaults()
-		return nil
-	}
+// 	// Asked for help?
+// 	if displayHelp {
+// 		log.Println(helptext)
+// 		flags.PrintDefaults()
+// 		return nil
+// 	}
 
-	// FlagSet.Parse() will evaluate to false if no flags were parsed
-	if !flags.Parsed() {
-		return fmt.Errorf("Error parsing arguments")
-	}
+// 	// FlagSet.Parse() will evaluate to false if no flags were parsed
+// 	if !flags.Parsed() {
+// 		return fmt.Errorf("Error parsing arguments")
+// 	}
 
-	client, err := getClient()
-	if err != nil {
-		return err
-	}
+// 	client, err := getClient()
+// 	if err != nil {
+// 		return err
+// 	}
 
-	ownerRepo := strings.Split(os.Args[2], "/")
-	if len(ownerRepo) != 2 {
-		return fmt.Errorf("Error parsing %s as 'owner/repo'", os.Args[2])
-	}
-	owner := ownerRepo[0]
-	reponame := ownerRepo[1]
+// 	ownerRepo := strings.Split(os.Args[2], "/")
+// 	if len(ownerRepo) != 2 {
+// 		return fmt.Errorf("Error parsing %s as 'owner/repo'", os.Args[2])
+// 	}
+// 	owner := ownerRepo[0]
+// 	reponame := ownerRepo[1]
 
+// 	ctx := context.Background()
+// 	repo, _, err := client.Repositories.Get(ctx, owner, reponame)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	log.Printf("Full name :           %s\n", *repo.FullName)
+// 	log.Printf("Default branch :      %s\n", *repo.DefaultBranch)
+
+// 	protection, _, err := client.Repositories.GetBranchProtection(ctx, owner, reponame, *repo.DefaultBranch)
+// 	if protection != nil {
+// 		prReviews := protection.GetRequiredPullRequestReviews()
+// 		if prReviews != nil {
+// 			log.Printf("Branch protection (%s), requires code review :  %t\n", *repo.DefaultBranch, true)
+// 			log.Printf("Branch protection (%s), approval count :        %d\n", *repo.DefaultBranch, prReviews.RequiredApprovingReviewCount)
+// 		} else {
+// 			log.Printf("Branch protection (%s), requires code review :  %t\n", *repo.DefaultBranch, false)
+// 		}
+
+// 		prStatusChecks := protection.GetRequiredStatusChecks()
+// 		if prStatusChecks != nil {
+// 			log.Printf("Branch protection (%s), branch must be up to date before merge :  %t\n", *repo.DefaultBranch, prStatusChecks.Strict)
+// 			log.Printf("Branch protection (%s), status checks :  %v\n", *repo.DefaultBranch, prStatusChecks.Contexts)
+// 		}
+
+// 	} else {
+// 		log.Printf("Branch protection  (%s):  None\n", *repo.DefaultBranch)
+// 	}
+
+// 	releases, err := listReleases(client, owner, reponame, maxReleases)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	log.Printf("\nReleases:\n---------\n")
+// 	tmpl := "%-11s %-19s %-12s %-18s %-40s\n"
+// 	log.Printf(tmpl, "Status", "Published", "Tag", "Author", "Name")
+// 	for i, release := range releases {
+// 		if i >= maxReleases {
+// 			break
+// 		}
+// 		status := ""
+// 		if *release.Draft {
+// 			status = "Draft"
+// 		} else if *release.Prerelease {
+// 			status = "Pre-release"
+// 		} else {
+// 			status = "Published"
+// 		}
+// 		log.Printf(tmpl, status, formatDate(release.PublishedAt), *release.TagName, *release.Author.Login, release.GetName())
+// 	}
+
+// 	tags, err := listTags(client, owner, reponame, maxTags)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	log.Printf("\nTags:\n---------\n")
+// 	tmpl = "%-12s %-45s\n"
+// 	log.Printf(tmpl, "Name", "Commit")
+// 	for i, tag := range tags {
+// 		if i >= maxTags {
+// 			break
+// 		}
+// 		log.Printf(tmpl, *tag.Name, tag.Commit.GetSHA())
+// 	}
+
+// 	return nil
+// }
+
+// func formatDate(t *github.Timestamp) string {
+// 	if t == nil {
+// 		return ""
+// 	}
+// 	return t.In(time.Local).Format("2006-01-02 15:04:05")
+// }
+
+// // returns tags in created order :-(
+// func listTags(client *github.Client, owner, repo string, max int) ([]*github.RepositoryTag, error) {
+// 	ctx := context.Background()
+// 	opt := &github.ListOptions{PerPage: 100}
+// 	// get all pages of results
+// 	var allTags []*github.RepositoryTag
+// 	for {
+// 		releases, resp, err := client.Repositories.ListTags(ctx, owner, repo, opt)
+// 		if err != nil {
+// 			return allTags, err
+// 		}
+// 		allTags = append(allTags, releases...)
+// 		if resp.NextPage == 0 {
+// 			break
+// 		}
+// 		// Break after retrieved max. Note this function can returned a slice larger than max, because
+// 		// we retrieve a page at a time
+// 		if max > 0 && len(allTags) > max {
+// 			break
+// 		}
+// 		opt.Page = resp.NextPage
+// 	}
+// 	return allTags, nil
+// }
+
+// func listReleases(client *github.Client, owner, repo string, max int) ([]*github.RepositoryRelease, error) {
+// 	ctx := context.Background()
+// 	opt := &github.ListOptions{PerPage: 100}
+// 	// get all pages of results
+// 	var allReleases []*github.RepositoryRelease
+// 	for {
+// 		releases, resp, err := client.Repositories.ListReleases(ctx, owner, repo, opt)
+// 		if err != nil {
+// 			return allReleases, err
+// 		}
+// 		allReleases = append(allReleases, releases...)
+// 		if resp.NextPage == 0 {
+// 			break
+// 		}
+// 		// Break after retrieved max. Note this function can returned a slice larger than max, because
+// 		// we retrieve a page at a time
+// 		if max > 0 && len(allReleases) > max {
+// 			break
+// 		}
+// 		opt.Page = resp.NextPage
+// 	}
+// 	return allReleases, nil
+// }
+
+func listReposByUser(client *githubv4.Client, user string) ([]Repository, error) {
 	ctx := context.Background()
-	repo, _, err := client.Repositories.Get(ctx, owner, reponame)
-	if err != nil {
-		return err
+	var q struct {
+		User struct {
+			Login        githubv4.String
+			Repositories struct {
+				Nodes    []Repository
+				PageInfo struct {
+					EndCursor   githubv4.String
+					HasNextPage bool
+				}
+			} `graphql:"repositories(first: 100, after: $repositoriesCursor)"` // 100 per page.
+		} `graphql:"user(login: $login)"`
 	}
 
-	log.Printf("Full name :           %s\n", *repo.FullName)
-	log.Printf("Default branch :      %s\n", *repo.DefaultBranch)
-
-	protection, _, err := client.Repositories.GetBranchProtection(ctx, owner, reponame, *repo.DefaultBranch)
-	if protection != nil {
-		prReviews := protection.GetRequiredPullRequestReviews()
-		if prReviews != nil {
-			log.Printf("Branch protection (%s), requires code review :  %t\n", *repo.DefaultBranch, true)
-			log.Printf("Branch protection (%s), approval count :        %d\n", *repo.DefaultBranch, prReviews.RequiredApprovingReviewCount)
-		} else {
-			log.Printf("Branch protection (%s), requires code review :  %t\n", *repo.DefaultBranch, false)
-		}
-
-		prStatusChecks := protection.GetRequiredStatusChecks()
-		if prStatusChecks != nil {
-			log.Printf("Branch protection (%s), branch must be up to date before merge :  %t\n", *repo.DefaultBranch, prStatusChecks.Strict)
-			log.Printf("Branch protection (%s), status checks :  %v\n", *repo.DefaultBranch, prStatusChecks.Contexts)
-		}
-
-	} else {
-		log.Printf("Branch protection  (%s):  None\n", *repo.DefaultBranch)
+	variables := map[string]interface{}{
+		"login":              githubv4.String(user),
+		"repositoriesCursor": (*githubv4.String)(nil), // Null after argument to get first page.
 	}
-
-	releases, err := listReleases(client, owner, reponame, maxReleases)
-	if err != nil {
-		return err
-	}
-	log.Printf("\nReleases:\n---------\n")
-	tmpl := "%-11s %-19s %-12s %-18s %-40s\n"
-	log.Printf(tmpl, "Status", "Published", "Tag", "Author", "Name")
-	for i, release := range releases {
-		if i >= maxReleases {
-			break
-		}
-		status := ""
-		if *release.Draft {
-			status = "Draft"
-		} else if *release.Prerelease {
-			status = "Pre-release"
-		} else {
-			status = "Published"
-		}
-		log.Printf(tmpl, status, formatDate(release.PublishedAt), *release.TagName, *release.Author.Login, release.GetName())
-	}
-
-	tags, err := listTags(client, owner, reponame, maxTags)
-	if err != nil {
-		return err
-	}
-	log.Printf("\nTags:\n---------\n")
-	tmpl = "%-12s %-45s\n"
-	log.Printf(tmpl, "Name", "Commit")
-	for i, tag := range tags {
-		if i >= maxTags {
-			break
-		}
-		log.Printf(tmpl, *tag.Name, tag.Commit.GetSHA())
-	}
-
-	return nil
-}
-
-func formatDate(t *github.Timestamp) string {
-	if t == nil {
-		return ""
-	}
-	return t.In(time.Local).Format("2006-01-02 15:04:05")
-}
-
-// returns tags in created order :-(
-func listTags(client *github.Client, owner, repo string, max int) ([]*github.RepositoryTag, error) {
-	ctx := context.Background()
-	opt := &github.ListOptions{PerPage: 100}
-	// get all pages of results
-	var allTags []*github.RepositoryTag
+	var allRepos []Repository
 	for {
-		releases, resp, err := client.Repositories.ListTags(ctx, owner, repo, opt)
-		if err != nil {
-			return allTags, err
-		}
-		allTags = append(allTags, releases...)
-		if resp.NextPage == 0 {
-			break
-		}
-		// Break after retrieved max. Note this function can returned a slice larger than max, because
-		// we retrieve a page at a time
-		if max > 0 && len(allTags) > max {
-			break
-		}
-		opt.Page = resp.NextPage
-	}
-	return allTags, nil
-}
-
-func listReleases(client *github.Client, owner, repo string, max int) ([]*github.RepositoryRelease, error) {
-	ctx := context.Background()
-	opt := &github.ListOptions{PerPage: 100}
-	// get all pages of results
-	var allReleases []*github.RepositoryRelease
-	for {
-		releases, resp, err := client.Repositories.ListReleases(ctx, owner, repo, opt)
-		if err != nil {
-			return allReleases, err
-		}
-		allReleases = append(allReleases, releases...)
-		if resp.NextPage == 0 {
-			break
-		}
-		// Break after retrieved max. Note this function can returned a slice larger than max, because
-		// we retrieve a page at a time
-		if max > 0 && len(allReleases) > max {
-			break
-		}
-		opt.Page = resp.NextPage
-	}
-	return allReleases, nil
-}
-
-func listReposByUser(client *github.Client, user string) ([]*github.Repository, error) {
-	ctx := context.Background()
-	opt := &github.RepositoryListOptions{
-		Type:        "all",
-		ListOptions: github.ListOptions{PerPage: 10},
-	}
-	// get all pages of results
-	var allRepos []*github.Repository
-	for {
-		repos, resp, err := client.Repositories.List(ctx, user, opt)
+		err := client.Query(ctx, &q, variables)
 		if err != nil {
 			return allRepos, err
 		}
-		allRepos = append(allRepos, repos...)
-		if resp.NextPage == 0 {
+		allRepos = append(allRepos, q.User.Repositories.Nodes...)
+		if !q.User.Repositories.PageInfo.HasNextPage {
 			break
 		}
-		opt.Page = resp.NextPage
+		variables["repositoriesCursor"] = githubv4.NewString(q.User.Repositories.PageInfo.EndCursor)
 	}
 	return allRepos, nil
 }
 
-func listReposByOrg(client *github.Client, org string) ([]*github.Repository, error) {
+func listReposByOrg(client *githubv4.Client, org string) ([]Repository, error) {
 	ctx := context.Background()
-	opt := &github.RepositoryListByOrgOptions{
-		Type:        "all",
-		ListOptions: github.ListOptions{PerPage: 10},
+	var q struct {
+		Organization struct {
+			Login        githubv4.String
+			Repositories struct {
+				Nodes    []Repository
+				PageInfo struct {
+					EndCursor   githubv4.String
+					HasNextPage bool
+				}
+			} `graphql:"repositories(first: 100, after: $repositoriesCursor)"` // 100 per page.
+		} `graphql:"organization(login: $login)"`
 	}
-	// get all pages of results
-	var allRepos []*github.Repository
+
+	variables := map[string]interface{}{
+		"login":              githubv4.String(org),
+		"repositoriesCursor": (*githubv4.String)(nil), // Null after argument to get first page.
+	}
+	var allRepos []Repository
 	for {
-		repos, resp, err := client.Repositories.ListByOrg(ctx, org, opt)
+		err := client.Query(ctx, &q, variables)
 		if err != nil {
 			return allRepos, err
 		}
-		allRepos = append(allRepos, repos...)
-		if resp.NextPage == 0 {
+		allRepos = append(allRepos, q.Organization.Repositories.Nodes...)
+		if !q.Organization.Repositories.PageInfo.HasNextPage {
 			break
 		}
-		opt.Page = resp.NextPage
+		variables["repositoriesCursor"] = githubv4.NewString(q.Organization.Repositories.PageInfo.EndCursor)
 	}
 	return allRepos, nil
 }
