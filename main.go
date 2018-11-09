@@ -12,7 +12,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	_ "time"
+	"time"
 )
 
 const (
@@ -39,6 +39,21 @@ Configuration:
 type Repository struct {
 	Name          string
 	NameWithOwner string
+}
+
+type Release struct {
+	Author struct {
+		Login githubv4.String
+	}
+	PublishedAt  githubv4.DateTime
+	Name         githubv4.String
+	Description  githubv4.String
+	IsDraft      githubv4.Boolean
+	IsPrerelease githubv4.Boolean
+	Url          githubv4.URI
+	Tag          struct {
+		Name githubv4.String
+	}
 }
 
 func init() {
@@ -295,18 +310,9 @@ Usage:
 					RequiredStatusCheckContexts  []githubv4.String
 				}
 			} `graphql:"branchProtectionRules(first: 10)"`
-			//   Releases(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
-			//     Nodes struct {
-			//       Author struct{
-			//         Login
-			//       }
-			//       PublishedAt
-			//       Name
-			//       Description
-			//       IsDraft
-			//       IsPrerelease
-			//     }
-			//   }
+			Releases struct {
+				Nodes []Release
+			} `graphql:"releases(first: $maxReleases, orderBy: {field: CREATED_AT, direction: DESC})"`
 			//   Tags: refs(refPrefix: "refs/tags/", last: 30, orderBy: {field: TAG_COMMIT_DATE, direction: DESC}) {
 			//     Edges struct{
 			//       Tag:node {
@@ -323,8 +329,9 @@ Usage:
 	}
 
 	variables := map[string]interface{}{
-		"owner": githubv4.String(owner),
-		"name":  githubv4.String(reponame),
+		"owner":       githubv4.String(owner),
+		"name":        githubv4.String(reponame),
+		"maxReleases": githubv4.Int(maxReleases),
 	}
 
 	err = client.Query(ctx, &q, variables)
@@ -336,7 +343,8 @@ Usage:
 	log.Printf("Default branch :      %s\n", q.Repository.DefaultBranchRef.Name)
 	for _, bpr := range q.Repository.BranchProtectionRules.Nodes {
 		for _, b := range bpr.MatchingRefs.Nodes {
-			log.Printf("Branch protection for '%s'\n", b.Name)
+			log.Printf("\nBranch protection for '%s'\n", b.Name)
+			log.Printf("------------------------%s\n", strings.Repeat("-", len(b.Name)))
 			log.Printf("  - approving review       :  %t\n", bpr.RequiresApprovingReviews)
 			log.Printf("  - approving review count :  %d\n", bpr.RequiredApprovingReviewCount)
 			log.Printf("  - status check           :  %t\n", bpr.RequiresStatusChecks)
@@ -344,27 +352,15 @@ Usage:
 		}
 	}
 
-	// releases, err := listReleases(client, owner, reponame, maxReleases)
-	// if err != nil {
-	// 	return err
-	// }
-	// log.Printf("\nReleases:\n---------\n")
-	// tmpl := "%-11s %-19s %-12s %-18s %-40s\n"
-	// log.Printf(tmpl, "Status", "Published", "Tag", "Author", "Name")
-	// for i, release := range releases {
-	// 	if i >= maxReleases {
-	// 		break
-	// 	}
-	// 	status := ""
-	// 	if *release.Draft {
-	// 		status = "Draft"
-	// 	} else if *release.Prerelease {
-	// 		status = "Pre-release"
-	// 	} else {
-	// 		status = "Published"
-	// 	}
-	// 	log.Printf(tmpl, status, formatDate(release.PublishedAt), *release.TagName, *release.Author.Login, release.GetName())
-	// }
+	log.Printf("\nReleases:\n---------\n")
+	tmpl := "%-11s %-19s %-12s %-18s %-40s\n"
+	log.Printf(tmpl, "Status", "Published", "Tag", "Author", "Name")
+	for i, r := range q.Repository.Releases.Nodes {
+		if i >= maxReleases {
+			break
+		}
+		log.Printf(tmpl, formatStatus(r), formatDate(r.PublishedAt), r.Tag.Name, r.Author.Login, r.Name)
+	}
 
 	// tags, err := listTags(client, owner, reponame, maxTags)
 	// if err != nil {
@@ -383,12 +379,18 @@ Usage:
 	return nil
 }
 
-// func formatDate(t *githubv4.Timestamp) string {
-// 	if t == nil {
-// 		return ""
-// 	}
-// 	return t.In(time.Local).Format("2006-01-02 15:04:05")
-// }
+func formatStatus(r Release) string {
+	if r.IsDraft {
+		return "Draft"
+	} else if r.IsPrerelease {
+		return "Pre-release"
+	}
+	return "Published"
+}
+
+func formatDate(t githubv4.DateTime) string {
+	return t.In(time.Local).Format("2006-01-02 15:04:05")
+}
 
 func listReposByUser(client *githubv4.Client, user string) ([]Repository, error) {
 	ctx := context.Background()
