@@ -10,6 +10,12 @@ Actions include:
 Configure acccess by creating a [Github Personal API token](https://blog.github.com/2013-05-16-personal-api-tokens/) and saving it to `~/.ght`.  The token should have access to
 
 
+## Install
+
+```
+make build install
+```
+
 ## List repos
 
 To list all of the repositories for an organisation ('MyOrg'), run the following command:
