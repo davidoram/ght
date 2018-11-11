@@ -116,16 +116,16 @@ type QueryRepoDetail struct {
 		Releases struct {
 			Nodes []Release
 		} `graphql:"releases(first: $maxReleases, orderBy: {field: CREATED_AT, direction: DESC})"`
-		Refs struct {
+		Tags struct {
 			Edges []struct {
-				Node struct {
+				Tag struct {
 					Name   githubv4.String
 					Target struct {
 						Oid githubv4.String
 					}
-				}
+				} `graphql:"tag: node()"`
 			}
-		} `graphql:"refs(refPrefix: $tagPrefix, last: $maxTags, orderBy: {field: TAG_COMMIT_DATE, direction: ASC})"`
+		} `graphql:"tags: refs(refPrefix: $tagPrefix, last: $maxTags, orderBy: {field: TAG_COMMIT_DATE, direction: ASC})"`
 	} `graphql:"repository(owner: $owner, name: $name)"`
 }
 
@@ -355,11 +355,11 @@ Usage:
 	log.Printf("\nTags:\n-----\n")
 	tmpl = "%-70s %s\n"
 	log.Printf(tmpl, "Tag", "Sha")
-	for i, t := range q.Repository.Refs.Edges {
+	for i, t := range q.Repository.Tags.Edges {
 		if i >= maxTags {
 			break
 		}
-		log.Printf(tmpl, t.Node.Name, t.Node.Target.Oid)
+		log.Printf(tmpl, t.Tag.Name, t.Tag.Target.Oid)
 	}
 	return nil
 }
