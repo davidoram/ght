@@ -43,11 +43,13 @@ Configuration:
 `
 )
 
+// Repository is the GitHub representation of a repository
 type Repository struct {
 	Name          string
 	NameWithOwner string
 }
 
+// Release is the GitHub representation of a release, see https://help.github.com/categories/releases/
 type Release struct {
 	Author struct {
 		Login githubv4.String
@@ -61,6 +63,70 @@ type Release struct {
 	Tag          struct {
 		Name githubv4.String
 	}
+}
+
+// QueryReposByUser is a query that returns all repositories accessable by a specific user login
+type QueryReposByUser struct {
+	User struct {
+		Login        githubv4.String
+		Repositories struct {
+			Nodes    []Repository
+			PageInfo struct {
+				EndCursor   githubv4.String
+				HasNextPage bool
+			}
+		} `graphql:"repositories(first: 100, after: $repositoriesCursor)"` // 100 per page.
+	} `graphql:"user(login: $login)"`
+}
+
+// QueryReposByUser is a query that returns all repositories owned by a specific organisation
+type QueryReposByOrg struct {
+	Organization struct {
+		Login        githubv4.String
+		Repositories struct {
+			Nodes    []Repository
+			PageInfo struct {
+				EndCursor   githubv4.String
+				HasNextPage bool
+			}
+		} `graphql:"repositories(first: 100, after: $repositoriesCursor)"` // 100 per page.
+	} `graphql:"organization(login: $login)"`
+}
+
+// QueryRepoDetail is a query that returns detailed information for a single repository
+type QueryRepoDetail struct {
+	Repository struct {
+		NameWithOwner    githubv4.String
+		DefaultBranchRef struct {
+			Name githubv4.String
+		}
+		BranchProtectionRules struct {
+			Nodes []struct {
+				MatchingRefs struct {
+					Nodes []struct {
+						Name githubv4.String
+					}
+				} `graphql:"matchingRefs(first: 10)"`
+				RequiresApprovingReviews     githubv4.Boolean
+				RequiredApprovingReviewCount githubv4.Int
+				RequiresStatusChecks         githubv4.Boolean
+				RequiredStatusCheckContexts  []githubv4.String
+			}
+		} `graphql:"branchProtectionRules(first: 10)"`
+		Releases struct {
+			Nodes []Release
+		} `graphql:"releases(first: $maxReleases, orderBy: {field: CREATED_AT, direction: DESC})"`
+		Refs struct {
+			Edges []struct {
+				Node struct {
+					Name   githubv4.String
+					Target struct {
+						Oid githubv4.String
+					}
+				}
+			}
+		} `graphql:"refs(refPrefix: $tagPrefix, last: $maxTags, orderBy: {field: TAG_COMMIT_DATE, direction: ASC})"`
+	} `graphql:"repository(owner: $owner, name: $name)"`
 }
 
 func init() {
@@ -249,41 +315,7 @@ Usage:
 	reponame := ownerRepo[1]
 
 	ctx := context.Background()
-	var q struct {
-		Repository struct {
-			NameWithOwner    githubv4.String
-			DefaultBranchRef struct {
-				Name githubv4.String
-			}
-			BranchProtectionRules struct {
-				Nodes []struct {
-					MatchingRefs struct {
-						Nodes []struct {
-							Name githubv4.String
-						}
-					} `graphql:"matchingRefs(first: 10)"`
-					RequiresApprovingReviews     githubv4.Boolean
-					RequiredApprovingReviewCount githubv4.Int
-					RequiresStatusChecks         githubv4.Boolean
-					RequiredStatusCheckContexts  []githubv4.String
-				}
-			} `graphql:"branchProtectionRules(first: 10)"`
-			Releases struct {
-				Nodes []Release
-			} `graphql:"releases(first: $maxReleases, orderBy: {field: CREATED_AT, direction: DESC})"`
-			Refs struct {
-				Edges []struct {
-					Node struct {
-						Name   githubv4.String
-						Target struct {
-							Oid githubv4.String
-						}
-					}
-				}
-			} `graphql:"refs(refPrefix: $tagPrefix, last: $maxTags, orderBy: {field: TAG_COMMIT_DATE, direction: ASC})"`
-		} `graphql:"repository(owner: $owner, name: $name)"`
-	}
-
+	var q QueryRepoDetail
 	variables := map[string]interface{}{
 		"owner":       githubv4.String(owner),
 		"name":        githubv4.String(reponame),
@@ -347,19 +379,7 @@ func formatDate(t githubv4.DateTime) string {
 
 func listReposByUser(client *githubv4.Client, user string) ([]Repository, error) {
 	ctx := context.Background()
-	var q struct {
-		User struct {
-			Login        githubv4.String
-			Repositories struct {
-				Nodes    []Repository
-				PageInfo struct {
-					EndCursor   githubv4.String
-					HasNextPage bool
-				}
-			} `graphql:"repositories(first: 100, after: $repositoriesCursor)"` // 100 per page.
-		} `graphql:"user(login: $login)"`
-	}
-
+	var q QueryReposByUser
 	variables := map[string]interface{}{
 		"login":              githubv4.String(user),
 		"repositoriesCursor": (*githubv4.String)(nil), // Null after argument to get first page.
@@ -381,19 +401,7 @@ func listReposByUser(client *githubv4.Client, user string) ([]Repository, error)
 
 func listReposByOrg(client *githubv4.Client, org string) ([]Repository, error) {
 	ctx := context.Background()
-	var q struct {
-		Organization struct {
-			Login        githubv4.String
-			Repositories struct {
-				Nodes    []Repository
-				PageInfo struct {
-					EndCursor   githubv4.String
-					HasNextPage bool
-				}
-			} `graphql:"repositories(first: 100, after: $repositoriesCursor)"` // 100 per page.
-		} `graphql:"organization(login: $login)"`
-	}
-
+	var q QueryReposByOrg
 	variables := map[string]interface{}{
 		"login":              githubv4.String(org),
 		"repositoriesCursor": (*githubv4.String)(nil), // Null after argument to get first page.
