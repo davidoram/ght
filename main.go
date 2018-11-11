@@ -313,18 +313,16 @@ Usage:
 			Releases struct {
 				Nodes []Release
 			} `graphql:"releases(first: $maxReleases, orderBy: {field: CREATED_AT, direction: DESC})"`
-			//   Tags: refs(refPrefix: "refs/tags/", last: 30, orderBy: {field: TAG_COMMIT_DATE, direction: DESC}) {
-			//     Edges struct{
-			//       Tag:node {
-			//         Name
-			//         Target struct{
-			//           Sha:oid
-
-			//         }
-			//       }
-			//     }
-			// 	}
-			// }
+			Refs struct {
+				Edges []struct {
+					Node struct {
+						Name   githubv4.String
+						Target struct {
+							Oid githubv4.String
+						}
+					}
+				}
+			} `graphql:"refs(refPrefix: $tagPrefix, last: $maxTags, orderBy: {field: TAG_COMMIT_DATE, direction: ASC})"`
 		} `graphql:"repository(owner: $owner, name: $name)"`
 	}
 
@@ -332,6 +330,8 @@ Usage:
 		"owner":       githubv4.String(owner),
 		"name":        githubv4.String(reponame),
 		"maxReleases": githubv4.Int(maxReleases),
+		"maxTags":     githubv4.Int(maxTags),
+		"tagPrefix":   githubv4.String("refs/tags/"),
 	}
 
 	err = client.Query(ctx, &q, variables)
@@ -360,6 +360,16 @@ Usage:
 			break
 		}
 		log.Printf(tmpl, formatStatus(r), formatDate(r.PublishedAt), r.Tag.Name, r.Author.Login, r.Name)
+	}
+
+	log.Printf("\nTags:\n-----\n")
+	tmpl = "%-70s %s\n"
+	log.Printf(tmpl, "Tag", "Sha")
+	for i, t := range q.Repository.Refs.Edges {
+		if i >= maxTags {
+			break
+		}
+		log.Printf(tmpl, t.Node.Name, t.Node.Target.Oid)
 	}
 
 	// tags, err := listTags(client, owner, reponame, maxTags)
