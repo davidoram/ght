@@ -12,6 +12,8 @@ Configure acccess by creating a [Github Personal API token](https://blog.github.
 
 ## Install
 
+Assumed you have go compiler installed.
+
 ```
 make build install
 ```
