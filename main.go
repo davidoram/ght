@@ -1,5 +1,12 @@
 package main
 
+/* ght is the 'GitHub Tool', s read only tool for displaying information about github repos
+ *
+ * See:
+ * - https://developer.github.com/v4/explorer/
+ * - https://github.com/shurcooL/githubv4
+ */
+
 import (
 	"context"
 	"flag"
@@ -156,6 +163,7 @@ func getClient() (*githubv4.Client, error) {
 	return client, nil
 }
 
+/* doListRepos displays information about all repos for a user, or for an organisation */
 func doListRepos(flags *flag.FlagSet, org *string, user *string, displayHelp bool) error {
 
 	helptext := `
@@ -204,6 +212,7 @@ The arguments are:
 	return nil
 }
 
+/* doRepo displays information about one repo */
 func doRepo(flags *flag.FlagSet, maxReleases, maxTags int, displayHelp bool) error {
 
 	helptext := `
@@ -239,57 +248,6 @@ Usage:
 	owner := ownerRepo[0]
 	reponame := ownerRepo[1]
 
-	/*
-					 https://developer.github.com/v4/explorer/
-					 https://github.com/shurcooL/githubv4
-
-				   {
-		  repository(owner: "davidoram", name: "gittest") {
-		    nameWithOwner
-		    defaultBranchRef{
-		      name
-		    }
-		    branchProtectionRules(first: 10){
-		      nodes {
-		        matchingRefs(first: 10) {
-		          nodes {
-		            name
-		          }
-		        }
-		        requiresApprovingReviews
-		        requiredApprovingReviewCount
-		        requiresStatusChecks
-		        requiredStatusCheckContexts
-		      }
-		    }
-		    releases(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
-		      nodes {
-		        author {
-		          login
-		        }
-		        publishedAt
-		        name
-		        description
-		        isDraft
-		        isPrerelease
-		      }
-		    }
-		    tags: refs(refPrefix: "refs/tags/", last: 30, orderBy: {field: TAG_COMMIT_DATE, direction: DESC}) {
-		      edges {
-		        tag:node {
-		          name
-		          target {
-		            sha:oid
-
-		          }
-		        }
-		      }
-		    }
-		  }
-		}
-
-
-	*/
 	ctx := context.Background()
 	var q struct {
 		Repository struct {
@@ -371,21 +329,6 @@ Usage:
 		}
 		log.Printf(tmpl, t.Node.Name, t.Node.Target.Oid)
 	}
-
-	// tags, err := listTags(client, owner, reponame, maxTags)
-	// if err != nil {
-	// 	return err
-	// }
-	// log.Printf("\nTags:\n---------\n")
-	// tmpl = "%-12s %-45s\n"
-	// log.Printf(tmpl, "Name", "Commit")
-	// for i, tag := range tags {
-	// 	if i >= maxTags {
-	// 		break
-	// 	}
-	// 	log.Printf(tmpl, *tag.Name, tag.Commit.GetSHA())
-	// }
-
 	return nil
 }
 
