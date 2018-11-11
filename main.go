@@ -331,14 +331,17 @@ Usage:
 
 	log.Printf("Full name :           %s\n", q.Repository.NameWithOwner)
 	log.Printf("Default branch :      %s\n", q.Repository.DefaultBranchRef.Name)
-	for _, bpr := range q.Repository.BranchProtectionRules.Nodes {
-		for _, b := range bpr.MatchingRefs.Nodes {
-			log.Printf("\nBranch protection for '%s'\n", b.Name)
-			log.Printf("------------------------%s\n", strings.Repeat("-", len(b.Name)))
-			log.Printf("  - approving review       :  %t\n", bpr.RequiresApprovingReviews)
-			log.Printf("  - approving review count :  %d\n", bpr.RequiredApprovingReviewCount)
-			log.Printf("  - status check           :  %t\n", bpr.RequiresStatusChecks)
-			log.Printf("  - status check contexts  :  %v\n", bpr.RequiredStatusCheckContexts)
+	if len(q.Repository.BranchProtectionRules.Nodes) == 0 {
+		log.Printf("Branch protection :   None\n")
+	} else {
+		for _, bpr := range q.Repository.BranchProtectionRules.Nodes {
+			for _, b := range bpr.MatchingRefs.Nodes {
+				log.Printf("\nBranch protection ('%s') : Enabled\n", b.Name)
+				log.Printf("  - approving review       :  %t\n", bpr.RequiresApprovingReviews)
+				log.Printf("  - approving review count :  %d\n", bpr.RequiredApprovingReviewCount)
+				log.Printf("  - status check           :  %t\n", bpr.RequiresStatusChecks)
+				log.Printf("  - status check contexts  :  %v\n", bpr.RequiredStatusCheckContexts)
+			}
 		}
 	}
 
