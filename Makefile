@@ -15,4 +15,5 @@ go-deps:
 	go get golang.org/x/oauth2
 	go get github.com/shurcooL/githubv4
 	go get github.com/gosuri/uitable
+	go get github.com/wzshiming/ctc
 

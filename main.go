@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"github.com/gosuri/uitable"
 	"github.com/shurcooL/githubv4"
+	"github.com/wzshiming/ctc"
 	"golang.org/x/oauth2"
 	"io/ioutil"
 	"log"
@@ -33,9 +34,10 @@ Usage:
 
 The commands are:
 
-	repos       		list the repositories
-	help        		show this help
-	help [command]	show help for command
+	repos           list the repositories
+	repo            summarise a single repository
+	help            show this help
+	help [command]  show help for command
 
 Configuration:
 
@@ -120,13 +122,11 @@ type QueryRepoDetail struct {
 			Nodes []Release
 		} `graphql:"releases(first: $maxReleases, orderBy: {field: CREATED_AT, direction: DESC})"`
 		Tags struct {
-			Edges []struct {
-				Tag struct {
-					Name   githubv4.String
-					Target struct {
-						Oid githubv4.String
-					}
-				} `graphql:"tag: node()"`
+			Nodes []struct {
+				Name   githubv4.String
+				Target struct {
+					Oid githubv4.String
+				}
 			}
 		} `graphql:"tags: refs(refPrefix: $tagPrefix, last: $maxTags, orderBy: {field: TAG_COMMIT_DATE, direction: ASC})"`
 	} `graphql:"repository(owner: $owner, name: $name)"`
@@ -149,9 +149,11 @@ func main() {
 	userPtr := reposCommand.String("u", "", "Specify the GitHub user")
 
 	repoCommand := flag.NewFlagSet("repo", flag.ExitOnError)
-	maxReleasesPtr := repoCommand.Int("r", 20, "Specify the maximum number of Releases to display")
-	maxTagsPtr := repoCommand.Int("t", 20, "Specify the maximum number of Tags to display")
-	showDescriptionPtr := repoCommand.Bool("d", false, "Display the Release description")
+	maxReleasesPtr := repoCommand.Int("maxr", 20, "Specify the maximum number of Releases to display, up to 100.")
+	maxTagsPtr := repoCommand.Int("maxt", 20, "Specify the maximum number of Tags to display, up to 100.")
+	showDescriptionPtr := repoCommand.Bool("desc", false, "Display the Release description")
+	showChangelogPtr := repoCommand.Bool("changelog", false, "Change to output format to display something like a traditional changelog")
+	printColorPtr := repoCommand.Bool("color", false, "Print the changelog in color")
 
 	// Verify that a subcommand has been provided
 	// os.Arg[0] is the main command
@@ -172,7 +174,7 @@ func main() {
 				err = doListRepos(reposCommand, orgPtr, userPtr, true)
 
 			case "repo":
-				err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, true)
+				err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, showChangelogPtr, printColorPtr, true)
 
 			default:
 				log.Printf("Help unknown command '%s'", os.Args[2])
@@ -189,7 +191,7 @@ func main() {
 
 	case "repo":
 		repoCommand.Parse(os.Args[3:])
-		err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, false)
+		err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, showChangelogPtr, printColorPtr, false)
 
 	default:
 		log.Printf("Unknown command '%s'", os.Args[1])
@@ -290,10 +292,10 @@ func newTable() *uitable.Table {
 }
 
 /* doRepo displays information about one repo */
-func doRepo(flags *flag.FlagSet, maxReleases, maxTags *int, showDescription *bool, displayHelp bool) error {
+func doRepo(flags *flag.FlagSet, maxReleases, maxTags *int, showDescription *bool, showChangelog *bool, printColor *bool, displayHelp bool) error {
 
 	helptext := `
-ght repo 		Summarise a given repository
+ght repo 		Summarise a single repository
 
 Usage:
 
@@ -336,13 +338,60 @@ The arguments are:
 		"tagPrefix":   githubv4.String("refs/tags/"),
 	}
 
-	table := newTable()
-
 	err = client.Query(ctx, &q, variables)
 	if err != nil {
 		return err
 	}
+	if *showChangelog {
+		return outputChangelog(q, maxReleases, printColor)
+	}
+	return outputRepoSummary(q, maxReleases, maxTags, showDescription)
+}
 
+func printfColor(printColor bool, color ctc.Color, format string, values ...interface{}) {
+	if printColor {
+		fmt.Print(color)
+	}
+	fmt.Printf(format, values...)
+	if printColor {
+		fmt.Print(ctc.Reset)
+	}
+}
+
+func outputChangelog(q QueryRepoDetail, maxReleases *int, printColor *bool) error {
+
+	fmt.Println(strings.Repeat("-", 80))
+	for i, r := range q.Repository.Releases.Nodes {
+		if i >= *maxReleases {
+			break
+		}
+
+		printfColor(*printColor, ctc.ForegroundGreen, "%s", formatTagName(r.Tag.Name))
+		color := ctc.ForegroundYellow
+		if formatStatus(r) != "Published" {
+			color = ctc.ForegroundRed
+		}
+		printfColor(*printColor, color, "  (%s)\n\n", formatStatus(r))
+		printfColor(*printColor, ctc.ForegroundYellow, "%s  %s  '%s'\n\n", formatDateShort(r.PublishedAt), r.Author.Login, r.Name)
+
+		title := "Desc:"
+		for _, d := range strings.Split(string(r.Description), "\n") {
+			fmt.Printf("%s   %s\n", title, d)
+			title = strings.Repeat(" ", len(title))
+		}
+
+		if i < (len(q.Repository.Releases.Nodes) - 1) {
+			fmt.Println("")
+			fmt.Println(strings.Repeat("-", 80))
+		}
+		fmt.Println("")
+	}
+
+	return nil
+}
+
+func outputRepoSummary(q QueryRepoDetail, maxReleases, maxTags *int, showDescription *bool) error {
+	table := newTable()
 	table.AddRow("Repository")
 	table.AddRow("----------")
 	table.AddRow("Full name:", q.Repository.NameWithOwner)
@@ -401,11 +450,11 @@ The arguments are:
 	table.AddRow("Tags")
 	table.AddRow("----")
 	table.AddRow("Tag", "Sha")
-	for i, t := range q.Repository.Tags.Edges {
+	for i, t := range q.Repository.Tags.Nodes {
 		if i >= *maxTags {
 			break
 		}
-		table.AddRow(t.Tag.Name, t.Tag.Target.Oid)
+		table.AddRow(t.Name, t.Target.Oid)
 	}
 	fmt.Println(table)
 	return nil
@@ -422,6 +471,17 @@ func formatStatus(r Release) string {
 
 func formatDate(t githubv4.DateTime) string {
 	return t.In(time.Local).Format("2006-01-02 15:04:05")
+}
+
+func formatDateShort(t githubv4.DateTime) string {
+	return t.In(time.Local).Format("2006-01-02")
+}
+
+func formatTagName(s githubv4.String) string {
+	if string(s) == "" {
+		return "Untagged"
+	}
+	return string(s)
 }
 
 func listReposByUser(client *githubv4.Client, user string) ([]Repository, error) {
