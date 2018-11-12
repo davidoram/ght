@@ -18,6 +18,12 @@ Assumed you have go compiler installed.
 make build install
 ```
 
+## Usage
+
+```
+ght help
+```
+
 ## List repos
 
 To list all of the repositories for an organisation ('MyOrg'), run the following command:
@@ -40,6 +46,8 @@ sstephenson/bashprof
 sstephenson/bats
 ...
 ```
+
+To see other options run `ght help repo`
 
 ## Show repository details
 
@@ -97,9 +105,70 @@ v1.1.3	7e39483974054e74b07f690742ac0fda8fe4e72d
 v1.1.4	166418892de06bd1671bd0d8fa7897abe64bd22d
 ```
 
-## Notes:
+### Notes:
 
 - The *Releases* section **ONLY** displays github releases, and **NOT** standard tags. Eg: compare the following example:
   - Tags https://github.com/davidoram/gittest/tags.
   - Release https://github.com/davidoram/gittest/releases
 - Branch protection settings are displayed for the all branches, in this example `master` has some protection settings enabled.
+- Run `ght help repo` to see other options
+
+
+## Show changelog
+
+To display a projects github releases in the form of a traditional [changelog](https://en.wikipedia.org/wiki/Changelog#Format), run the following, for example to show the change log for [gittest project](https://github.com/davidoram/gittest):
+
+```
+$ ght repo davidoram/gittest -changelog -color
+
+--------------------------------------------------------------------------------
+Untagged  (Draft)
+
+0001-01-01  davidoram  'Added -p flag'
+
+Desc:   **Features**
+
+        - Added the -p flag
+
+        **Other**
+
+        - Added support for RasbperryPi
+
+--------------------------------------------------------------------------------
+
+v1.1.4  (Pre-release)
+
+2018-11-07  davidoram  'Added support for Mac'
+
+Desc:   **Other**
+
+        - Added support for Mac
+
+--------------------------------------------------------------------------------
+
+v1.1.3  (Published)
+
+2017-07-10  davidoram  'The first release'
+
+Desc:   **Bug Fixes**
+
+        - Fixed the bug that broke stuff
+
+        **Features**
+
+        - Added the -l flag
+
+        **Improvements**
+
+        - Speed improved x2
+
+        **Other**
+
+        - Added support for Windows
+
+```
+
+### Notes:
+
+- Uses the same logic as the [Show repository details](#Show_repository_details)
+- Pass the `-color` flag to add a sprinking of color, which makes it a bit easier to can and read

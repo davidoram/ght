@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"github.com/gosuri/uitable"
 	"github.com/shurcooL/githubv4"
+	"github.com/wzshiming/ctc"
 	"golang.org/x/oauth2"
 	"io/ioutil"
 	"log"
@@ -33,9 +34,10 @@ Usage:
 
 The commands are:
 
-	repos       		list the repositories
-	help        		show this help
-	help [command]	show help for command
+	repos           list the repositories
+	repo            summarise a single repository
+	help            show this help
+	help [command]  show help for command
 
 Configuration:
 
@@ -147,10 +149,11 @@ func main() {
 	userPtr := reposCommand.String("u", "", "Specify the GitHub user")
 
 	repoCommand := flag.NewFlagSet("repo", flag.ExitOnError)
-	maxReleasesPtr := repoCommand.Int("r", 20, "Specify the maximum number of Releases to display, up to 100.")
-	maxTagsPtr := repoCommand.Int("t", 20, "Specify the maximum number of Tags to display, up to 100.")
-	showDescriptionPtr := repoCommand.Bool("d", false, "Display the Release description")
-	showChangelogPtr := repoCommand.Bool("c", false, "Change to output format to display something like a traditional changelog")
+	maxReleasesPtr := repoCommand.Int("maxr", 20, "Specify the maximum number of Releases to display, up to 100.")
+	maxTagsPtr := repoCommand.Int("maxt", 20, "Specify the maximum number of Tags to display, up to 100.")
+	showDescriptionPtr := repoCommand.Bool("desc", false, "Display the Release description")
+	showChangelogPtr := repoCommand.Bool("changelog", false, "Change to output format to display something like a traditional changelog")
+	printColorPtr := repoCommand.Bool("color", false, "Print the changelog in color")
 
 	// Verify that a subcommand has been provided
 	// os.Arg[0] is the main command
@@ -171,7 +174,7 @@ func main() {
 				err = doListRepos(reposCommand, orgPtr, userPtr, true)
 
 			case "repo":
-				err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, showChangelogPtr, true)
+				err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, showChangelogPtr, printColorPtr, true)
 
 			default:
 				log.Printf("Help unknown command '%s'", os.Args[2])
@@ -188,7 +191,7 @@ func main() {
 
 	case "repo":
 		repoCommand.Parse(os.Args[3:])
-		err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, showChangelogPtr, false)
+		err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, showChangelogPtr, printColorPtr, false)
 
 	default:
 		log.Printf("Unknown command '%s'", os.Args[1])
@@ -289,10 +292,10 @@ func newTable() *uitable.Table {
 }
 
 /* doRepo displays information about one repo */
-func doRepo(flags *flag.FlagSet, maxReleases, maxTags *int, showDescription *bool, showChangelog *bool, displayHelp bool) error {
+func doRepo(flags *flag.FlagSet, maxReleases, maxTags *int, showDescription *bool, showChangelog *bool, printColor *bool, displayHelp bool) error {
 
 	helptext := `
-ght repo 		Summarise a given repository
+ght repo 		Summarise a single repository
 
 Usage:
 
@@ -340,20 +343,36 @@ The arguments are:
 		return err
 	}
 	if *showChangelog {
-		return outputChangelog(q, maxReleases)
+		return outputChangelog(q, maxReleases, printColor)
 	}
 	return outputRepoSummary(q, maxReleases, maxTags, showDescription)
 }
 
-func outputChangelog(q QueryRepoDetail, maxReleases *int) error {
+func printfColor(printColor bool, color ctc.Color, format string, values ...interface{}) {
+	if printColor {
+		fmt.Print(color)
+	}
+	fmt.Printf(format, values...)
+	if printColor {
+		fmt.Print(ctc.Reset)
+	}
+}
+
+func outputChangelog(q QueryRepoDetail, maxReleases *int, printColor *bool) error {
 
 	fmt.Println(strings.Repeat("-", 80))
 	for i, r := range q.Repository.Releases.Nodes {
 		if i >= *maxReleases {
 			break
 		}
-		fmt.Printf("%s (%s)\n\n", formatTagName(r.Tag.Name), formatStatus(r))
-		fmt.Printf("%s  %s  '%s'\n\n", formatDateShort(r.PublishedAt), r.Author.Login, r.Name)
+
+		printfColor(*printColor, ctc.ForegroundGreen, "%s", formatTagName(r.Tag.Name))
+		color := ctc.ForegroundYellow
+		if formatStatus(r) != "Published" {
+			color = ctc.ForegroundRed
+		}
+		printfColor(*printColor, color, "  (%s)\n\n", formatStatus(r))
+		printfColor(*printColor, ctc.ForegroundYellow, "%s  %s  '%s'\n\n", formatDateShort(r.PublishedAt), r.Author.Login, r.Name)
 
 		title := "Desc:"
 		for _, d := range strings.Split(string(r.Description), "\n") {
