@@ -11,6 +11,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/gosuri/uitable"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 	"io/ioutil"
@@ -47,6 +48,7 @@ Configuration:
 type Repository struct {
 	Name          string
 	NameWithOwner string
+	Url           string
 }
 
 // Release is the GitHub representation of a release, see https://help.github.com/categories/releases/
@@ -97,6 +99,7 @@ type QueryReposByOrg struct {
 type QueryRepoDetail struct {
 	Repository struct {
 		NameWithOwner    githubv4.String
+		Url              githubv4.String
 		DefaultBranchRef struct {
 			Name githubv4.String
 		}
@@ -144,9 +147,11 @@ func main() {
 	reposCommand := flag.NewFlagSet("repos", flag.ExitOnError)
 	orgPtr := reposCommand.String("o", "", "Specify the GitHub organisation")
 	userPtr := reposCommand.String("u", "", "Specify the GitHub user")
+
 	repoCommand := flag.NewFlagSet("repo", flag.ExitOnError)
-	maxReleasesPtr := reposCommand.Int("maxr", 20, "Specify the maximum number of Releases to display")
-	maxTagsPtr := reposCommand.Int("maxt", 20, "Specify the maximum number of Tags to display")
+	maxReleasesPtr := repoCommand.Int("r", 20, "Specify the maximum number of Releases to display")
+	maxTagsPtr := repoCommand.Int("t", 20, "Specify the maximum number of Tags to display")
+	showDescriptionPtr := repoCommand.Bool("d", false, "Display the Release description")
 
 	// Verify that a subcommand has been provided
 	// os.Arg[0] is the main command
@@ -167,7 +172,7 @@ func main() {
 				err = doListRepos(reposCommand, orgPtr, userPtr, true)
 
 			case "repo":
-				err = doRepo(repoCommand, *maxReleasesPtr, *maxTagsPtr, true)
+				err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, true)
 
 			default:
 				log.Printf("Help unknown command '%s'", os.Args[2])
@@ -183,8 +188,8 @@ func main() {
 		err = doListRepos(reposCommand, orgPtr, userPtr, false)
 
 	case "repo":
-		repoCommand.Parse(os.Args[2:])
-		err = doRepo(repoCommand, *maxReleasesPtr, *maxTagsPtr, false)
+		repoCommand.Parse(os.Args[3:])
+		err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, false)
 
 	default:
 		log.Printf("Unknown command '%s'", os.Args[1])
@@ -278,16 +283,23 @@ The arguments are:
 	return nil
 }
 
+func newTable() *uitable.Table {
+	table := uitable.New()
+	table.Wrap = true // wrap columns
+	return table
+}
+
 /* doRepo displays information about one repo */
-func doRepo(flags *flag.FlagSet, maxReleases, maxTags int, displayHelp bool) error {
+func doRepo(flags *flag.FlagSet, maxReleases, maxTags *int, showDescription *bool, displayHelp bool) error {
 
 	helptext := `
 ght repo 		Summarise a given repository
 
 Usage:
 
-	mdd repo owner/repo
+	mdd repo owner/repo [arguments]
 
+The arguments are:
 `
 
 	// Asked for help?
@@ -319,51 +331,82 @@ Usage:
 	variables := map[string]interface{}{
 		"owner":       githubv4.String(owner),
 		"name":        githubv4.String(reponame),
-		"maxReleases": githubv4.Int(maxReleases),
-		"maxTags":     githubv4.Int(maxTags),
+		"maxReleases": githubv4.Int(*maxReleases),
+		"maxTags":     githubv4.Int(*maxTags),
 		"tagPrefix":   githubv4.String("refs/tags/"),
 	}
+
+	table := newTable()
 
 	err = client.Query(ctx, &q, variables)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("Full name :           %s\n", q.Repository.NameWithOwner)
-	log.Printf("Default branch :      %s\n", q.Repository.DefaultBranchRef.Name)
+	table.AddRow("Repository")
+	table.AddRow("----------")
+	table.AddRow("Full name:", q.Repository.NameWithOwner)
+	table.AddRow("Default branch", q.Repository.DefaultBranchRef.Name)
+	table.AddRow("URL", q.Repository.Url)
+	table.AddRow("")
+	fmt.Println(table)
+
+	table = newTable()
+	table.AddRow("Branch Protection")
+	table.AddRow("-----------------")
 	if len(q.Repository.BranchProtectionRules.Nodes) == 0 {
-		log.Printf("Branch protection :   None\n")
+		table.AddRow("n/a")
 	} else {
 		for _, bpr := range q.Repository.BranchProtectionRules.Nodes {
 			for _, b := range bpr.MatchingRefs.Nodes {
-				log.Printf("\nBranch protection ('%s') : Enabled\n", b.Name)
-				log.Printf("  - approving review       :  %t\n", bpr.RequiresApprovingReviews)
-				log.Printf("  - approving review count :  %d\n", bpr.RequiredApprovingReviewCount)
-				log.Printf("  - status check           :  %t\n", bpr.RequiresStatusChecks)
-				log.Printf("  - status check contexts  :  %v\n", bpr.RequiredStatusCheckContexts)
+				table.AddRow("Branch:", b.Name)
+				table.AddRow("- approving review:", bpr.RequiresApprovingReviews)
+				table.AddRow("- approving review count:", bpr.RequiredApprovingReviewCount)
+				table.AddRow("- approving review count:", bpr.RequiredApprovingReviewCount)
+				table.AddRow("- status check:", bpr.RequiresStatusChecks)
+				table.AddRow("- status check contexts:", bpr.RequiredStatusCheckContexts)
 			}
 		}
 	}
+	table.AddRow("")
+	fmt.Println(table)
 
-	log.Printf("\nReleases:\n---------\n")
-	tmpl := "%-11s %-19s %-12s %-18s %-40s\n"
-	log.Printf(tmpl, "Status", "Published", "Tag", "Author", "Name")
+	table = newTable()
+	table.AddRow("Releases")
+	table.AddRow("--------")
 	for i, r := range q.Repository.Releases.Nodes {
-		if i >= maxReleases {
+		if i >= *maxReleases {
 			break
 		}
-		log.Printf(tmpl, formatStatus(r), formatDate(r.PublishedAt), r.Tag.Name, r.Author.Login, r.Name)
+		table = newTable()
+		table.AddRow("Tag:", r.Tag.Name)
+		table.AddRow("Release status:", formatStatus(r))
+		table.AddRow("Published at:", formatDate(r.PublishedAt))
+		table.AddRow("Author:", r.Author.Login)
+		table.AddRow("URL:", r.Url)
+		table.AddRow("Name:", r.Name)
+		fmt.Println(table)
+		if *showDescription {
+			title := "Description "
+			for _, d := range strings.Split(string(r.Description), "\n") {
+				fmt.Printf("%s:   %s\n", title, d)
+				title = "            "
+			}
+		}
+		fmt.Printf("\n\n")
 	}
 
-	log.Printf("\nTags:\n-----\n")
-	tmpl = "%-70s %s\n"
-	log.Printf(tmpl, "Tag", "Sha")
+	table = newTable()
+	table.AddRow("Tags")
+	table.AddRow("----")
+	table.AddRow("Tag", "Sha")
 	for i, t := range q.Repository.Tags.Edges {
-		if i >= maxTags {
+		if i >= *maxTags {
 			break
 		}
-		log.Printf(tmpl, t.Tag.Name, t.Tag.Target.Oid)
+		table.AddRow(t.Tag.Name, t.Tag.Target.Oid)
 	}
+	fmt.Println(table)
 	return nil
 }
 
