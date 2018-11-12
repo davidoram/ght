@@ -120,13 +120,11 @@ type QueryRepoDetail struct {
 			Nodes []Release
 		} `graphql:"releases(first: $maxReleases, orderBy: {field: CREATED_AT, direction: DESC})"`
 		Tags struct {
-			Edges []struct {
-				Tag struct {
-					Name   githubv4.String
-					Target struct {
-						Oid githubv4.String
-					}
-				} `graphql:"tag: node()"`
+			Nodes []struct {
+				Name   githubv4.String
+				Target struct {
+					Oid githubv4.String
+				}
 			}
 		} `graphql:"tags: refs(refPrefix: $tagPrefix, last: $maxTags, orderBy: {field: TAG_COMMIT_DATE, direction: ASC})"`
 	} `graphql:"repository(owner: $owner, name: $name)"`
@@ -433,11 +431,11 @@ func outputRepoSummary(q QueryRepoDetail, maxReleases, maxTags *int, showDescrip
 	table.AddRow("Tags")
 	table.AddRow("----")
 	table.AddRow("Tag", "Sha")
-	for i, t := range q.Repository.Tags.Edges {
+	for i, t := range q.Repository.Tags.Nodes {
 		if i >= *maxTags {
 			break
 		}
-		table.AddRow(t.Tag.Name, t.Tag.Target.Oid)
+		table.AddRow(t.Name, t.Target.Oid)
 	}
 	fmt.Println(table)
 	return nil
