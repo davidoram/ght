@@ -374,6 +374,7 @@ The arguments are:
 	table = newTable()
 	table.AddRow("Releases")
 	table.AddRow("--------")
+	fmt.Println(table)
 	for i, r := range q.Repository.Releases.Nodes {
 		if i >= *maxReleases {
 			break
