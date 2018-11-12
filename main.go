@@ -149,9 +149,10 @@ func main() {
 	userPtr := reposCommand.String("u", "", "Specify the GitHub user")
 
 	repoCommand := flag.NewFlagSet("repo", flag.ExitOnError)
-	maxReleasesPtr := repoCommand.Int("r", 20, "Specify the maximum number of Releases to display")
-	maxTagsPtr := repoCommand.Int("t", 20, "Specify the maximum number of Tags to display")
+	maxReleasesPtr := repoCommand.Int("r", 20, "Specify the maximum number of Releases to display, up to 100.")
+	maxTagsPtr := repoCommand.Int("t", 20, "Specify the maximum number of Tags to display, up to 100.")
 	showDescriptionPtr := repoCommand.Bool("d", false, "Display the Release description")
+	showChangelogPtr := repoCommand.Bool("c", false, "Change to output format to display something like a traditional changelog")
 
 	// Verify that a subcommand has been provided
 	// os.Arg[0] is the main command
@@ -172,7 +173,7 @@ func main() {
 				err = doListRepos(reposCommand, orgPtr, userPtr, true)
 
 			case "repo":
-				err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, true)
+				err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, showChangelogPtr, true)
 
 			default:
 				log.Printf("Help unknown command '%s'", os.Args[2])
@@ -189,7 +190,7 @@ func main() {
 
 	case "repo":
 		repoCommand.Parse(os.Args[3:])
-		err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, false)
+		err = doRepo(repoCommand, maxReleasesPtr, maxTagsPtr, showDescriptionPtr, showChangelogPtr, false)
 
 	default:
 		log.Printf("Unknown command '%s'", os.Args[1])
@@ -290,7 +291,7 @@ func newTable() *uitable.Table {
 }
 
 /* doRepo displays information about one repo */
-func doRepo(flags *flag.FlagSet, maxReleases, maxTags *int, showDescription *bool, displayHelp bool) error {
+func doRepo(flags *flag.FlagSet, maxReleases, maxTags *int, showDescription *bool, showChangelog *bool, displayHelp bool) error {
 
 	helptext := `
 ght repo 		Summarise a given repository
@@ -336,13 +337,44 @@ The arguments are:
 		"tagPrefix":   githubv4.String("refs/tags/"),
 	}
 
-	table := newTable()
-
 	err = client.Query(ctx, &q, variables)
 	if err != nil {
 		return err
 	}
+	if *showChangelog {
+		return outputChangelog(q, maxReleases)
+	}
+	return outputRepoSummary(q, maxReleases, maxTags, showDescription)
+}
 
+func outputChangelog(q QueryRepoDetail, maxReleases *int) error {
+
+	fmt.Println(strings.Repeat("-", 80))
+	for i, r := range q.Repository.Releases.Nodes {
+		if i >= *maxReleases {
+			break
+		}
+		fmt.Printf("%s (%s)\n\n", formatTagName(r.Tag.Name), formatStatus(r))
+		fmt.Printf("%s  %s  '%s'\n\n", formatDateShort(r.PublishedAt), r.Author.Login, r.Name)
+
+		title := "Desc:"
+		for _, d := range strings.Split(string(r.Description), "\n") {
+			fmt.Printf("%s   %s\n", title, d)
+			title = strings.Repeat(" ", len(title))
+		}
+
+		if i < (len(q.Repository.Releases.Nodes) - 1) {
+			fmt.Println("")
+			fmt.Println(strings.Repeat("-", 80))
+		}
+		fmt.Println("")
+	}
+
+	return nil
+}
+
+func outputRepoSummary(q QueryRepoDetail, maxReleases, maxTags *int, showDescription *bool) error {
+	table := newTable()
 	table.AddRow("Repository")
 	table.AddRow("----------")
 	table.AddRow("Full name:", q.Repository.NameWithOwner)
@@ -422,6 +454,17 @@ func formatStatus(r Release) string {
 
 func formatDate(t githubv4.DateTime) string {
 	return t.In(time.Local).Format("2006-01-02 15:04:05")
+}
+
+func formatDateShort(t githubv4.DateTime) string {
+	return t.In(time.Local).Format("2006-01-02")
+}
+
+func formatTagName(s githubv4.String) string {
+	if string(s) == "" {
+		return "Untagged"
+	}
+	return string(s)
 }
 
 func listReposByUser(client *githubv4.Client, user string) ([]Repository, error) {
