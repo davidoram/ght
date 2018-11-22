@@ -360,29 +360,17 @@ func printfColor(printColor bool, color ctc.Color, format string, values ...inte
 
 func outputChangelog(q QueryRepoDetail, maxReleases *int, printColor *bool) error {
 
-	fmt.Println(strings.Repeat("-", 80))
+	fmt.Print("# Change Log\n\n")
 	for i, r := range q.Repository.Releases.Nodes {
 		if i >= *maxReleases {
 			break
 		}
 
-		printfColor(*printColor, ctc.ForegroundGreen, "%s", formatTagName(r.Tag.Name))
-		color := ctc.ForegroundYellow
-		if formatStatus(r) != "Published" {
-			color = ctc.ForegroundRed
-		}
-		printfColor(*printColor, color, "  (%s)\n\n", formatStatus(r))
-		printfColor(*printColor, ctc.ForegroundYellow, "%s  %s  '%s'\n\n", formatDateShort(r.PublishedAt), r.Author.Login, r.Name)
-
-		title := "Desc:"
-		for _, d := range strings.Split(string(r.Description), "\n") {
-			fmt.Printf("%s   %s\n", title, d)
-			title = strings.Repeat(" ", len(title))
-		}
-
-		if i < (len(q.Repository.Releases.Nodes) - 1) {
-			fmt.Println("")
-			fmt.Println(strings.Repeat("-", 80))
+		printfColor(*printColor, ctc.ForegroundGreen, "## %s\n\n", formatTagName(r.Tag.Name))
+		printfColor(*printColor, ctc.ForegroundYellow, "- %s\n", formatReleaseTitle(r.Name))
+		desc := strings.TrimSpace(strings.Replace(string(r.Description), "\n", " ", -1))
+		if desc != "" {
+			fmt.Printf("  - %s\n", desc)
 		}
 		fmt.Println("")
 	}
@@ -480,6 +468,13 @@ func formatDateShort(t githubv4.DateTime) string {
 func formatTagName(s githubv4.String) string {
 	if string(s) == "" {
 		return "Untagged"
+	}
+	return string(s)
+}
+
+func formatReleaseTitle(s githubv4.String) string {
+	if string(s) == "" {
+		return "_No release title_"
 	}
 	return string(s)
 }
