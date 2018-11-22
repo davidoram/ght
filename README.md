@@ -119,52 +119,45 @@ v1.1.4	166418892de06bd1671bd0d8fa7897abe64bd22d
 To display a projects github releases in the form of a traditional [changelog](https://en.wikipedia.org/wiki/Changelog#Format), run the following, for example to show the change log for [gittest project](https://github.com/davidoram/gittest):
 
 ```
-$ ght repo davidoram/gittest -changelog -color
+$ # Change Log
 
---------------------------------------------------------------------------------
-Untagged  (Draft)
+## Untagged
 
-0001-01-01  davidoram  'Added -p flag'
+- Added -p flag
+  - **Features**
+ 
+ - Added the -p flag
+ 
+ **Other**
+ 
+ - Added support for RasbperryPi
 
-Desc:   **Features**
+## v1.1.4
 
-        - Added the -p flag
+- Added support for Mac
+  - **Other**
+ 
+ - Added support for Mac
 
-        **Other**
+## v1.1.3
 
-        - Added support for RasbperryPi
+- The first release
+  - **Bug Fixes**
+ 
+ - Fixed the bug that broke stuff
+ 
+ **Features**
+ 
+ - Added the -l flag
+ 
+ **Improvements**
+ 
+ - Speed improved x2
+ 
+ **Other**
+ 
+ - Added support for Windows
 
---------------------------------------------------------------------------------
-
-v1.1.4  (Pre-release)
-
-2018-11-07  davidoram  'Added support for Mac'
-
-Desc:   **Other**
-
-        - Added support for Mac
-
---------------------------------------------------------------------------------
-
-v1.1.3  (Published)
-
-2017-07-10  davidoram  'The first release'
-
-Desc:   **Bug Fixes**
-
-        - Fixed the bug that broke stuff
-
-        **Features**
-
-        - Added the -l flag
-
-        **Improvements**
-
-        - Speed improved x2
-
-        **Other**
-
-        - Added support for Windows
 
 ```
 
