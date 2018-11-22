@@ -119,7 +119,8 @@ v1.1.4	166418892de06bd1671bd0d8fa7897abe64bd22d
 To display a projects github releases in the form of a traditional [changelog](https://en.wikipedia.org/wiki/Changelog#Format), run the following, for example to show the change log for [gittest project](https://github.com/davidoram/gittest):
 
 ```
-$ # Change Log
+$ ght repo davidoram/gittest -changelog
+# Change Log
 
 ## Untagged
 
